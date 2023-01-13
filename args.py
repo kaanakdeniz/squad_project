@@ -25,6 +25,13 @@ def get_setup_args():
     parser.add_argument('--glove_url',
                         type=str,
                         default='http://nlp.stanford.edu/data/glove.840B.300d.zip')
+    parser.add_argument('--with_fasttext',
+                        type=bool,
+                        default=False,
+                        action="store_true")
+    parser.add_argument('--fasttext_url',
+                        type=str,
+                        default='https://dl.fbaipublicfiles.com/fasttext/vectors-english/crawl-300d-2M-subword.zip')
     parser.add_argument('--dev_meta_file',
                         type=str,
                         default='./data/dev_meta.json')

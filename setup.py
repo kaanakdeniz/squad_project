@@ -15,6 +15,7 @@ import numpy as np
 import os
 import spacy
 import ujson as json
+import shutil
 import urllib.request
 
 from args import get_setup_args
@@ -375,12 +376,26 @@ def pre_process(args):
     save(args.dev_meta_file, dev_meta, message="dev meta")
 
 
+def fasttext_vecs_to_text(fasttext_file, out_file):
+    print(f"Converting {fasttext_file} to {out_file}...")
+    source_file = open(fasttext_file, 'r', encoding='utf-8')
+    source_file.readline()
+    target_file = open(out_file, 'w', encoding="utf-8")
+
+    shutil.copyfileobj(source_file, target_file)
+
 if __name__ == '__main__':
     # Get command-line args
     args_ = get_setup_args()
 
+    if args_.with_fasttext:
+        args_.glove_url = args_.fasttext_url
     # Download resources
     download(args_)
+    if args_.with_fasttext:
+        txt_file  = args_.glove_url.replace('.vec', '.txt')
+        if not os.path.exists(txt_file):
+            fasttext_vecs_to_text(args_.glove_url, txt_file)
 
     # Import spacy language model
     nlp = spacy.blank("en")
@@ -391,6 +406,5 @@ if __name__ == '__main__':
     if args_.include_test_examples:
         args_.test_file = url_to_data_path(args_.test_url)
     glove_dir = url_to_data_path(args_.glove_url.replace('.zip', ''))
-    glove_ext = f'.txt' if glove_dir.endswith('d') else f'.{args_.glove_dim}d.txt'
-    args_.glove_file = os.path.join(glove_dir, os.path.basename(glove_dir) + glove_ext)
+    args_.glove_file = os.path.join(glove_dir, os.path.basename(glove_dir) + '.txt')
     pre_process(args_)
