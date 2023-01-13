@@ -26,7 +26,6 @@ def get_setup_args():
                         type=str,
                         default='http://nlp.stanford.edu/data/glove.840B.300d.zip')
     parser.add_argument('--with_fasttext',
-                        type=bool,
                         default=False,
                         action="store_true")
     parser.add_argument('--fasttext_url',

@@ -392,11 +392,6 @@ if __name__ == '__main__':
         args_.glove_url = args_.fasttext_url
     # Download resources
     download(args_)
-    if args_.with_fasttext:
-        txt_file  = args_.glove_url.replace('.vec', '.txt')
-        if not os.path.exists(txt_file):
-            fasttext_vecs_to_text(args_.glove_url, txt_file)
-
     # Import spacy language model
     nlp = spacy.blank("en")
 
@@ -406,5 +401,9 @@ if __name__ == '__main__':
     if args_.include_test_examples:
         args_.test_file = url_to_data_path(args_.test_url)
     glove_dir = url_to_data_path(args_.glove_url.replace('.zip', ''))
-    args_.glove_file = os.path.join(glove_dir, os.path.basename(glove_dir) + '.txt')
+    args_.glove_file = os.path.join(
+        glove_dir, f'{os.path.basename(glove_dir)}.txt'
+    )
+    if args_.with_fasttext and not os.path.isfile(args_.glove_file):
+        fasttext_vecs_to_text(args_.glove_file.replace("txt", "vec"), args_.glove_file)
     pre_process(args_)
