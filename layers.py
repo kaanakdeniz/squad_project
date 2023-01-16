@@ -220,3 +220,44 @@ class BiDAFOutput(nn.Module):
         log_p2 = masked_softmax(logits_2.squeeze(), mask, log_softmax=True)
 
         return log_p1, log_p2
+
+class WordEmbedding(nn.Module):
+    def __init__(self, word_vectors, hidden_size, drop_prob):
+        super(WordEmbedding, self).__init__()
+        self.drop_prob = drop_prob
+        self.embed = nn.Embedding.from_pretrained(word_vectors)
+        self.proj = nn.Linear(word_vectors.size()[1], hidden_size, bias=False)
+
+    def forward(self, x):
+        emb = self.embed(x)
+        emb = F.dropout(emb, self.drop_prob, self.training)
+        emb = self.proj(emb)
+        return emb
+
+
+class CharEmbedding(nn.Module):
+    def __init__(self, char_vectors, hidden_size, drop_prob, kernel_height):
+        max_word_length = 16
+        word_vec_size = 300
+        char_vec_size = 64
+
+        super(CharEmbedding, self).__init__()
+        self.drop_prob = drop_prob
+        self.embed = nn.Embedding.from_pretrained(char_vectors)
+        self.conv = nn.Conv2d(in_channels=1, out_channels=word_vec_size,
+                              kernel_size=(kernel_height, char_vec_size), stride=1)
+        self.maxpool = nn.MaxPool2d(kernel_size=(max_word_length - kernel_height + 1, 1), stride=1)
+        self.proj = nn.Linear(word_vec_size, hidden_size, bias=False)
+
+    def forward(self, x):
+        emb = self.embed(x)
+        emb = F.dropout(emb, self.drop_prob, self.training)
+        batch_size, seq_len, word_len, embed_size = emb.size()
+        emb = emb.view(-1, 1, word_len, embed_size)
+        emb = self.conv(emb)
+        emb = F.relu(emb)
+        emb = self.maxpool(emb)
+        emb = emb.squeeze()
+        emb = self.proj(emb)
+        emb = emb.view(batch_size, seq_len, -1)
+        return emb

@@ -248,3 +248,7 @@ def add_train_test_args(parser):
                         type=str,
                         default=None,
                         help='Path to load as a model checkpoint.')
+    parser.add_argument('--model',
+                    type=str,
+                    default='bidaf',
+                    help='Model to train/test.')
