@@ -133,8 +133,11 @@ class BiDAFCharEmbed(nn.Module):
         return out
 
 
+d
+
 def init_model(name, split, **kwargs):
     name = name.lower()
+    print(f'Initializing model: {name}')
     if name == 'bidaf':
         return BiDAF(word_vectors=kwargs['word_vectors'],
                      hidden_size=kwargs['hidden_size'],
