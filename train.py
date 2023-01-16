@@ -49,7 +49,7 @@ def main(args):
     log.info('Building model...')
     model = init_model(args.model, 'train', word_vectors=word_vectors,
                   hidden_size=args.hidden_size,
-                  drop_prob=args.drop_prob, char_vectors= char_vectors)
+                  drop_prob=args.drop_prob, char_vectors= char_vectors, attention=args.attention)
     model = nn.DataParallel(model, args.gpu_ids)
     if args.load_path:
         log.info(f'Loading checkpoint from {args.load_path}...')

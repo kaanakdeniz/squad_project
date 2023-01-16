@@ -144,7 +144,10 @@ class BiDAFSelfAttention(nn.Module):
                                      hidden_size=hidden_size,
                                      num_layers=1,
                                      drop_prob=drop_prob)
-        self.att = init_attention(att_type, hidden_size, drop_prob, kwargs['att_dim'])
+
+        self.att = layers.BiDAFAttention(hidden_size=2 * hidden_size,
+                                         drop_prob=drop_prob)
+        self.self_att = init_attention(att_type, hidden_size, drop_prob)
 
         self.mod = layers.RNNEncoder(input_size=8 * hidden_size,
                                      hidden_size=hidden_size,
@@ -176,7 +179,7 @@ class BiDAFSelfAttention(nn.Module):
         return out
 
 
-def init_attention(att_type, hidden_size, drop_prob, att_dim):
+def init_attention(att_type, hidden_size, drop_prob):
     self_att = None
     if att_type == 'multiplicative':
         self_att = layers.MultiplicativeSelfAttention(input_size=8 * hidden_size,
@@ -187,11 +190,11 @@ def init_attention(att_type, hidden_size, drop_prob, att_dim):
                                                                 drop_prob=drop_prob)
     elif att_type == 'additive':
         self_att = layers.AdditiveSelfAttention(input_size=8 * hidden_size,
-                                                        att_dim=att_dim,
+                                                        att_dim=hidden_size,
                                                         drop_prob=drop_prob)
     elif att_type == 'gated_add':
         self_att = layers.GatedAdditiveSelfAttention(input_size=8 * hidden_size,
-                                                            att_dim=att_dim,
+                                                            att_dim=hidden_size,
                                                             hidden_size=4 * hidden_size,
                                                             drop_prob=drop_prob)
     else:
@@ -214,6 +217,7 @@ def init_model(name, split, **kwargs):
                               drop_prob=kwargs['drop_prob'] if split == 'train' else 0)
     elif name == 'attention':
         attention_type = kwargs['attention']
+        print(f'Using {attention_type} attention')
         return BiDAFSelfAttention(word_vectors=kwargs['word_vectors'],
                          hidden_size=kwargs['hidden_size'], att_type=attention_type,
                          drop_prob=kwargs['drop_prob'] if split == 'train' else 0)
