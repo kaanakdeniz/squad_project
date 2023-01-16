@@ -133,7 +133,6 @@ class BiDAFCharEmbed(nn.Module):
         return out
 
 
-d
 
 def init_model(name, split, **kwargs):
     name = name.lower()
