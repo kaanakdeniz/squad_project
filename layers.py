@@ -10,6 +10,7 @@ import torch.nn.functional as F
 
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from util import masked_softmax
+from attention_calc import *
 
 
 class Embedding(nn.Module):
@@ -261,3 +262,117 @@ class CharEmbedding(nn.Module):
         emb = self.proj(emb)
         emb = emb.view(batch_size, seq_len, -1)
         return emb
+
+class MultiplicativeSelfAttention(nn.Module):
+    """
+    Simple multiplicative self attention.
+    The output is processed by a linear layer with a ReLU activation.
+    This is a residual layer, meaning the input is added to the output.
+
+    Args:
+        input_size: dimension of input vectors
+        drop_prob: dropout probability
+    """
+    def __init__(self, input_size, drop_prob):
+        super(MultiplicativeSelfAttention, self).__init__()
+        self.W = nn.Linear(input_size, input_size, bias=False)
+        self.dropout = nn.Dropout(drop_prob)
+        self.proj = nn.Linear(input_size, input_size)
+
+    def forward(self, x):
+        c = calc_multiplicative_attention(self.W, x)       # (batch_size, seq_len, input_size)
+        c = torch.relu(self.proj(c))
+        return self.dropout(x + c)    # (batch_size, seq_len, input_size)
+
+
+class GatedMultiplicativeSelfAttention(nn.Module):
+    """
+    Multiplicative self attention.
+    The output is passed through an element-wise multiplicative gate and then processed by a bidirectional RNN.
+    It is then processed by a linear layer.
+    This is a residual layer, meaning the input is added to the output.
+
+    Args:
+        input_size: dimension of input vector
+        hidden_size: dimension of RNN hidden states
+        drop_prob: dropout probability
+    """
+    def __init__(self, input_size, hidden_size, drop_prob):
+        super(GatedMultiplicativeSelfAttention, self).__init__()
+        self.W = nn.Linear(input_size, input_size, bias=False)
+        self.dropout = nn.Dropout(drop_prob)
+        self.gate = nn.Sequential(nn.Linear(2 * input_size, 2 * input_size, bias=False),
+                                  nn.Sigmoid())
+        self.rnn = nn.GRU(input_size=2 * input_size,
+                          hidden_size=hidden_size,
+                          bidirectional=True,
+                          batch_first=True)
+        self.proj = nn.Linear(2 * hidden_size, input_size)
+
+    def forward(self, x):
+        c = calc_multiplicative_attention(self.W, x)    # (batch_size, seq_len, input_size)
+        h = self.dropout(calc_gated_attention(x, c, self.gate, self.rnn, self.proj))
+        return x + h  # (batch_size, seq_len, input_size)
+
+
+class AdditiveSelfAttention(nn.Module):
+    """
+    Simple additive self attention.
+    The output is processed by a linear layer with a ReLU activation.
+    This is a residual layer, meaning the input is added to the output.
+
+    This layer is very memory intensive.
+
+    Args:
+        input_size: dimension of input vectors
+        att_dim: dimension of the projected matrix used for calculating additive attention
+        drop_prob: dropout probability
+    """
+    def __init__(self, input_size, att_dim, drop_prob):
+        super(AdditiveSelfAttention, self).__init__()
+        self.W = nn.Linear(input_size, att_dim, bias=False)
+        self.Wtilde = nn.Linear(input_size, att_dim, bias=False)
+        self.v = nn.Linear(att_dim, 1, bias=False)
+        self.dropout = nn.Dropout(drop_prob)
+        self.proj = nn.Linear(input_size, input_size)
+
+    def forward(self, x):
+        c = calc_additive_attention(self.W, self.Wtilde, self.v, x)       # (batch_size, seq_len, input_size)
+        c = torch.relu(self.proj(c))
+        return self.dropout(x + c)    # (batch_size, seq_len, input_size)
+
+
+class GatedAdditiveSelfAttention(nn.Module):
+    """
+    Additive self attention.
+    The output is passed through an element-wise multiplicative gate and then processed by a bidirectional RNN.
+    It is then processed by a linear layer.
+    This is a residual layer, meaning the input is added to the output.
+
+    This layer is very memory intensive.
+
+    Args:
+        input_size: dimension of input vector
+        att_dim: dimension of the projected matrix used for calculating additive attention
+        hidden_size: dimension of RNN hidden states
+        drop_prob: dropout probability
+    """
+    def __init__(self, input_size, att_dim, hidden_size, drop_prob):
+        super(GatedAdditiveSelfAttention, self).__init__()
+        self.W = nn.Linear(input_size, att_dim, bias=False)
+        self.Wtilde = nn.Linear(input_size, att_dim, bias=False)
+        self.v = nn.Linear(att_dim, 1, bias=False)
+        self.dropout = nn.Dropout(drop_prob)
+        self.gate = nn.Sequential(nn.Linear(2 * input_size, 2 * input_size, bias=False),
+                                  nn.Sigmoid())
+        self.rnn = nn.GRU(input_size=2 * input_size,
+                          hidden_size=hidden_size,
+                          bidirectional=True,
+                          batch_first=True)
+        self.proj = nn.Linear(2 * hidden_size, input_size)
+
+    def forward(self, x):
+        c = calc_additive_attention(self.W, x)  # (batch_size, seq_len, input_size)
+        h = self.dropout(calc_gated_attention(x, c, self.gate, self.rnn, self.proj))
+        return x + h  # (batch_size, seq_len, input_size)
+
