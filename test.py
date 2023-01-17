@@ -45,7 +45,7 @@ def main(args):
     # Get model
     log.info('Building model...')
     model = init_model(args.model, 'eval', word_vectors=word_vectors, char_vectors=char_vectors,
-                              hidden_size=args.hidden_size)
+                              hidden_size=args.hidden_size, attention=args.attention)
     model = nn.DataParallel(model, gpu_ids)
     log.info(f'Loading checkpoint from {args.load_path}...')
     model = util.load_model(model, args.load_path, gpu_ids, return_step=False)
