@@ -179,6 +179,70 @@ class BiDAFSelfAttention(nn.Module):
         return out
 
 
+class BiDAFCharEmbedSelfAttention(nn.Module):
+    def __init__(self, word_vectors, char_vectors, hidden_size, att_type=None, drop_prob=0., **kwargs):
+        super(BiDAFCharEmbedSelfAttention, self).__init__()
+        self.word_emb = layers.WordEmbedding(word_vectors=word_vectors,
+                                             hidden_size=hidden_size,
+                                             drop_prob=drop_prob)
+
+        self.char_emb = layers.CharEmbedding(char_vectors=char_vectors,
+                                             hidden_size=hidden_size,
+                                             drop_prob=drop_prob,
+                                             kernel_height=3)
+
+        self.highway = layers.HighwayEncoder(num_layers=2, hidden_size=2 * hidden_size)
+
+        self.highway_proj = nn.Linear(2 * hidden_size, hidden_size)
+
+        self.enc = layers.RNNEncoder(input_size=hidden_size,
+                                     hidden_size=hidden_size,
+                                     num_layers=1,
+                                     drop_prob=drop_prob)
+
+        self.att = layers.BiDAFAttention(hidden_size=2 * hidden_size,
+                                         drop_prob=drop_prob)
+
+
+        self.self_att = init_attention(att_type, hidden_size, drop_prob)
+
+        self.mod = layers.RNNEncoder(input_size=8 * hidden_size,
+                                     hidden_size=hidden_size,
+                                     num_layers=2,
+                                     drop_prob=drop_prob)
+
+        self.out = layers.BiDAFOutput(hidden_size=hidden_size,
+                                      drop_prob=drop_prob)
+
+    def forward(self, cw_idxs, qw_idxs, cc_idxs, qc_idxs, *args):
+        c_mask = torch.zeros_like(cw_idxs) != cw_idxs
+        q_mask = torch.zeros_like(qw_idxs) != qw_idxs
+        c_len, q_len = c_mask.sum(-1), q_mask.sum(-1)
+
+        cw_emb = self.word_emb(cw_idxs)         # (batch_size, c_len, hidden_size)
+        qw_emb = self.word_emb(qw_idxs)         # (batch_size, q_len, hidden_size)
+
+        cc_emb = self.char_emb(cc_idxs)         # (batch_size, c_len, hidden_size)
+        qc_emb = self.char_emb(qc_idxs)         # (batch_size, q_len, hidden_size)
+
+        c_emb_cat = torch.cat((cw_emb, cc_emb), 2)  # (batch_size, c_len, 2 * hidden_size)
+        q_emb_cat = torch.cat((qw_emb, qc_emb), 2)  # (batch_size, q_len, 2 * hidden_size)
+
+        c_emb = self.highway_proj(self.highway(c_emb_cat))  # (batch_size, c_len, hidden_size)
+        q_emb = self.highway_proj(self.highway(q_emb_cat))  # (batch_size, q_len, hidden_size)
+
+        c_enc = self.enc(c_emb, c_len)    # (batch_size, c_len, 2 * hidden_size)
+        q_enc = self.enc(q_emb, q_len)    # (batch_size, q_len, 2 * hidden_size)
+
+        att = self.att(c_enc, q_enc, c_mask, q_mask)    # (batch_size, c_len, 8 * hidden_size)
+        self_att = self.self_att(att)
+
+        mod = self.mod(self_att, c_len)        # (batch_size, c_len, 2 * hidden_size)
+
+        out = self.out(self_att, mod, c_mask)  # 2 tensors, each (batch_size, c_len)
+
+        return out
+
 def init_attention(att_type, hidden_size, drop_prob):
     self_att = None
     if att_type == 'multiplicative':
@@ -219,6 +283,13 @@ def init_model(name, split, **kwargs):
         attention_type = kwargs['attention']
         print(f'Using {attention_type} attention')
         return BiDAFSelfAttention(word_vectors=kwargs['word_vectors'],
-                         hidden_size=kwargs['hidden_size'], att_type=attention_type,
-                         drop_prob=kwargs['drop_prob'] if split == 'train' else 0)
+                                  hidden_size=kwargs['hidden_size'], att_type=attention_type,
+                                  drop_prob=kwargs['drop_prob'] if split == 'train' else 0)
+    elif name == 'attention_charemb':
+        attention_type = kwargs['attention']
+        print(f'Using {attention_type} attention')
+        return BiDAFCharEmbedSelfAttention(word_vectors=kwargs['word_vectors'],
+                                           char_vectors=kwargs['char_vectors'],
+                                           hidden_size=kwargs['hidden_size'], att_type=attention_type,
+                                           drop_prob=kwargs['drop_prob'] if split == 'train' else 0)
     raise ValueError(f'No model named {name}')

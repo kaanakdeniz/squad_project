@@ -254,5 +254,5 @@ def add_train_test_args(parser):
                         help='Model to train/test.')
     parser.add_argument('--attention',
                         type=str,
-                        default=None,
+                        default='additive',
                         help='Attention mechanism to use.')
